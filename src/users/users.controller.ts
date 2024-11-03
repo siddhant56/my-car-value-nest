@@ -8,8 +8,10 @@ import {
   Query,
   Delete,
   NotFoundException,
-  UseInterceptors,
-  ClassSerializerInterceptor,
+  UseGuards,
+  // UseInterceptors,
+  // ClassSerializerInterceptor,
+  Session,
 } from '@nestjs/common';
 import { CreateUserDto } from './dtos/create-user-dto';
 import { UsersService } from './users.service';
@@ -19,14 +21,56 @@ import {
   SerializeInterceptor,
 } from 'src/interceptors/serialize.interceptor';
 import { UserDto } from './dtos/user.dto';
+import { AuthService } from './auth.service';
+import { CurrentUser } from './decorators/current-user.decorator';
+// import { CurrentUserInterceptor } from './interceptors/current-user.interceptor';
+import { User } from './user.entity';
+import { AuthGuard } from 'src/guards/auth.guard';
 
 @Controller('auth')
 @Serialize(UserDto)
+// @UseInterceptors(CurrentUserInterceptor)
 export class UsersController {
-  constructor(private userService: UsersService) {}
+  constructor(
+    private userService: UsersService,
+    private authService: AuthService,
+  ) {}
+
+  //Incorrect way
+  @Get('/whoami')
+  @UseGuards(AuthGuard)
+  whoAmI(@CurrentUser() user: User) {
+    // return this.userService.findOne(session.userId);
+    return user;
+  }
+
+  @Get('/colors/:colors')
+  setColor(@Param() color: string, @Session() session: any) {
+    session.color = color;
+  }
+
+  @Get('/colors')
+  getColor(@Session() session: any) {
+    return session.color;
+  }
+
+  @Post('/signout')
+  signOut(@Session() session: any) {
+    session.userId = null;
+  }
+
   @Post('/signup')
-  createUser(@Body() user: CreateUserDto) {
-    this.userService.create(user.email, user.password);
+  async createUser(@Body() body: CreateUserDto, @Session() session: any) {
+    const user = await this.authService.signup(body.email, body.password);
+    session.userId = user.id;
+    return user;
+  }
+
+  @Post('/signin')
+  async signin(@Body() body: CreateUserDto, @Session() session: any) {
+    const user = await this.authService.signin(body.email, body.password);
+    session.userId = user.id;
+    return user;
   }
 
   @Get('/:id')
